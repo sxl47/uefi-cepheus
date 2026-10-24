@@ -1,0 +1,76 @@
+name: Build uefi-cepheus
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+env:
+  CI_BUILD: true
+  CLANGPDB_AARCH64_PREFIX: aarch64-linux-gnu-
+  # Pinned commit of UniXNU/uefi-sheng the overlay patch is generated against.
+  UEFI_REF: 0eb4514db0744b8136a3897ab1af93b713c2c27b
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential lld uuid-dev nasm \
+            gcc-aarch64-linux-gnu clang llvm python3-pip gettext
+
+      - name: Clone uefi-sheng (pinned)
+        run: |
+          git clone https://github.com/UniXNU/uefi-sheng.git
+          git -C uefi-sheng checkout "${UEFI_REF}"
+
+      - name: Install python dependencies
+        run: |
+          python3 -m pip install --break-system-packages -r uefi-sheng/pip-requirements.txt
+
+      - name: Build stock cepheus UEFI (Windows-flavor, no UniXNU)
+        run: |
+          cd uefi-sheng
+          python3 build_uefi.py -d cepheus -r DEBUG -c
+          mv Mu-cepheus.img ../Mu-cepheus-stock.img
+
+      - name: Upload stock image
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mu-cepheus-stock
+          path: Mu-cepheus-stock.img
+          if-no-files-found: ignore
+
+      - name: Assemble UniXNU tree and apply overlay
+        run: |
+          git clone --depth 1 https://github.com/UniXNU/UniXNU.git unixnu-umbrella
+          git -C unixnu-umbrella submodule update --init --depth 1 drivers/DarwinBoot
+          # Mu_Basecore nested submodules (libfdt etc.) are needed by BaseFdtLib.
+          git -C uefi-sheng/Mu_Basecore submodule update --init --depth 1
+          # PackagesPath entries added by the overlay; relative symlinks into the umbrella.
+          ln -s ../unixnu-umbrella/package uefi-sheng/UniXNU-Pkg-Tree
+          ln -s ../unixnu-umbrella/drivers/DarwinBoot uefi-sheng/DarwinBoot-Tree
+          git -C uefi-sheng apply ../overlay/unixnu-fv.patch
+          echo "--- patched PackagesPath ---"
+          sed -n '30,45p' uefi-sheng/Platforms/Xiaomi/cepheusPkg/DeviceBuild.py
+
+      - name: Build UniXNU cepheus UEFI
+        continue-on-error: true
+        run: |
+          cd uefi-sheng
+          python3 build_uefi.py -d cepheus -r DEBUG -c
+          mv Mu-cepheus.img ../Mu-cepheus-unixnu.img
+
+      - name: Upload UniXNU image
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mu-cepheus-unixnu
+          path: Mu-cepheus-unixnu.img
+          if-no-files-found: ignore

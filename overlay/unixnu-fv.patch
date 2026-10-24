@@ -1,0 +1,83 @@
+diff --git a/Platforms/Xiaomi/cepheusPkg/DeviceBuild.py b/Platforms/Xiaomi/cepheusPkg/DeviceBuild.py
+index 2178d35..2c6748a 100644
+--- a/Platforms/Xiaomi/cepheusPkg/DeviceBuild.py
++++ b/Platforms/Xiaomi/cepheusPkg/DeviceBuild.py
+@@ -38,7 +38,9 @@ class CommonPlatform ():
+         "Silicon/Silicium",
+         "Silicium-ACPI",
+         "Silicium-ACPI/Platforms/Xiaomi",
+-        "Silicium-ACPI/Silicon/Qualcomm"
++        "Silicium-ACPI/Silicon/Qualcomm",
++        "UniXNU-Pkg-Tree",
++        "DarwinBoot-Tree"
+     )
+ 
+ # ####################################################################################### #
+diff --git a/Platforms/Xiaomi/cepheusPkg/Include/APRIORI.inc b/Platforms/Xiaomi/cepheusPkg/Include/APRIORI.inc
+index 9ec5bde..f500c7f 100644
+--- a/Platforms/Xiaomi/cepheusPkg/Include/APRIORI.inc
++++ b/Platforms/Xiaomi/cepheusPkg/Include/APRIORI.inc
+@@ -96,4 +96,8 @@ APRIORI DXE {
+ !endif
+ 
+   INF MdeModulePkg/Universal/Console/GraphicsConsoleDxe/GraphicsConsoleDxe.inf
++
++  # UniXNU: dispatch DarwinBoot in the first wave so the UniXNU loader
++  # protocol is installed before anything consumes it.
++  INF DarwinBootPkg/Driver/DarwinBoot.inf
+ }
+diff --git a/Platforms/Xiaomi/cepheusPkg/Include/DXE.inc b/Platforms/Xiaomi/cepheusPkg/Include/DXE.inc
+index 064352a..12dda6e 100644
+--- a/Platforms/Xiaomi/cepheusPkg/Include/DXE.inc
++++ b/Platforms/Xiaomi/cepheusPkg/Include/DXE.inc
+@@ -86,6 +86,9 @@
+   INF Binaries/cepheus/QcomPkg/Drivers/CipherDxe/CipherDxe.inf
+   INF Binaries/cepheus/QcomPkg/Drivers/RNGDxe/RngDxe.inf
+ 
++  # UniXNU: the Darwin loader must live in the firmware volume; a driver
++  # loaded from a volume is refused by this build's image verification.
++  INF DarwinBootPkg/Driver/DarwinBoot.inf
+   INF MdeModulePkg/Universal/BdsDxe/BdsDxe.inf
+ 
+   INF Binaries/cepheus/QcomPkg/Drivers/PILDxe/PILDxe.inf
+diff --git a/Platforms/Xiaomi/cepheusPkg/cepheus.dsc b/Platforms/Xiaomi/cepheusPkg/cepheus.dsc
+index 5c3ceef..7cd2145 100644
+--- a/Platforms/Xiaomi/cepheusPkg/cepheus.dsc
++++ b/Platforms/Xiaomi/cepheusPkg/cepheus.dsc
+@@ -83,8 +83,21 @@
+   #
+   ConfigurationMapLib|cepheusPkg/Library/ConfigurationMapLib/ConfigurationMapLib.inf
+ 
++  #
++  # UniXNU
++  #
++  UniXNULib|UniXNUPkg/Library/UniXNULib/UniXNULib.inf
++  FdtLib|MdePkg/Library/BaseFdtLib/BaseFdtLib.inf
++
+ [Components]
+   #
+   # ACPI Tables
+   #
+   cepheus/AcpiTables.inf
++
++  #
++  # UniXNU
++  #
++  UniXNUPkg/Application/UniXNU/UniXNU.inf
++  UniXNUPkg/Driver/UniXNUDxe/UniXNUDxe.inf
++  DarwinBootPkg/Driver/DarwinBoot.inf
+diff --git a/Platforms/Xiaomi/cepheusPkg/cepheus.fdf b/Platforms/Xiaomi/cepheusPkg/cepheus.fdf
+index 36061c8..386056e 100644
+--- a/Platforms/Xiaomi/cepheusPkg/cepheus.fdf
++++ b/Platforms/Xiaomi/cepheusPkg/cepheus.fdf
+@@ -90,6 +90,10 @@ READ_LOCK_STATUS   = TRUE
+   INF MdeModulePkg/Universal/SmbiosDxe/SmbiosDxe.inf
+   INF SiliciumPkg/Drivers/SmBiosTableDxe/SmBiosTableDxe.inf
+ 
++  # UniXNU
++  INF UniXNUPkg/Application/UniXNU/UniXNU.inf
++  INF UniXNUPkg/Driver/UniXNUDxe/UniXNUDxe.inf
++
+   # ACPI
+   INF MdeModulePkg/Universal/Acpi/AcpiTableDxe/AcpiTableDxe.inf
+   INF MdeModulePkg/Universal/Acpi/AcpiPlatformDxe/AcpiPlatformDxe.inf

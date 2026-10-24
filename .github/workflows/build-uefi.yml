@@ -22,7 +22,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential lld uuid-dev nasm \
-            gcc-aarch64-linux-gnu clang llvm python3-pip gettext
+            gcc-aarch64-linux-gnu clang llvm python3-pip gettext \
+            mono-devel ca-certificates
 
       - name: Clone uefi-sheng (pinned)
         run: |

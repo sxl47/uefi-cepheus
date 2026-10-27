@@ -23,6 +23,24 @@ Daniel224455 维护,Display/Internal Storage/USB Device Mode/Mass Storage 均 �
 | `Include/APRIORI.inc` | 第一个 APRIORI DXE 块加 DarwinBoot(nabu 经验:否则 LocateProtocol(UniXNULoader) 找不到) |
 | `DeviceBuild.py` | PackagesPath 加 `UniXNU-Pkg-Tree` / `DarwinBoot-Tree`(CI 里是指向 UniXNU 伞仓库 package/ 与 drivers/DarwinBoot 的符号链接) |
 
+## overlay/darwinboot-diag.patch(交接诊断)
+
+真机上出现过「绿条在屏幕顶部 + 一堆 `DARWINBOOT:` 日志」然后内核完全沉默。
+问题在于 `DarwinEnter` 把交接标记画在**屏幕顶部 1/16**,正好盖掉 DarwinBoot
+退出启动服务前打印的关键几行——其中 `video base=0x...`(UEFI 真实 framebuffer
+物理地址)和 `entry pa=0x...`(内核入口物理地址)是诊断静默内核的唯一依据。
+
+本补丁:
+
+| 文件 | 改动 |
+|---|---|
+| `Entry.S` | 交接绿条从**顶部** 1/16 改到**底部** 1/16,不再遮住日志 |
+| `DarwinBoot.c` | 在最后一行前重复打印 `video pa` 与 `entry pa`,即使屏幕被部分覆盖也还在 |
+
+补丁按 `UniXNU` 伞仓库 pin 的 DarwinBoot commit 生成(blob
+`e2c5d91`/`a7a55c2`);CI 用 `git apply --check` 先验证,上游一改就**构建失败**,
+不会静默出一个日志仍被遮住的镜像。
+
 ## 真机使用
 
 ```

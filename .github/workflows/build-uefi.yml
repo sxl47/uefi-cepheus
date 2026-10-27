@@ -58,15 +58,45 @@ jobs:
           ln -s ../unixnu-umbrella/package uefi-sheng/UniXNU-Pkg-Tree
           ln -s ../unixnu-umbrella/drivers/DarwinBoot uefi-sheng/DarwinBoot-Tree
           git -C uefi-sheng apply ../overlay/unixnu-fv.patch
+          # Diagnostics patch, applied inside the DarwinBoot submodule (its own
+          # git repo, so -p1 is relative to DarwinBootPkg/'s parent).
+          #
+          # It must apply exactly: if upstream moved these lines the build has
+          # to stop here rather than silently ship an image whose hand-off log
+          # is still hidden behind the marker bar.
+          git -C unixnu-umbrella/drivers/DarwinBoot apply --check \
+            "$GITHUB_WORKSPACE/overlay/darwinboot-diag.patch"
+          git -C unixnu-umbrella/drivers/DarwinBoot apply \
+            "$GITHUB_WORKSPACE/overlay/darwinboot-diag.patch"
+          echo "--- darwinboot diagnostics patch ---"
+          git -C unixnu-umbrella/drivers/DarwinBoot diff --stat
           echo "--- patched PackagesPath ---"
           sed -n '30,45p' uefi-sheng/Platforms/Xiaomi/cepheusPkg/DeviceBuild.py
 
       - name: Build UniXNU cepheus UEFI
-        continue-on-error: true
+        # No continue-on-error: this image is the whole point of the repository,
+        # and a silent failure used to leave the stock image looking like the
+        # only artifact of a "successful" run.
         run: |
           cd uefi-sheng
           python3 build_uefi.py -d cepheus -r DEBUG -c
           mv Mu-cepheus.img ../Mu-cepheus-unixnu.img
+
+      - name: Verify the image carries the UniXNU boot stack
+        run: |
+          cd uefi-sheng
+          echo "--- UniXNU components actually built ---"
+          # Do not depend on BASE_NAME: check by package path.
+          find Build -path '*UniXNUPkg*' -name '*.efi' | sort | tee /tmp/unixnu.txt
+          find Build -path '*DarwinBootPkg*' -name '*.efi' | sort | tee /tmp/darwin.txt
+          [ "$(wc -l < /tmp/unixnu.txt)" -ge 2 ] || { echo "::error::UniXNU app/driver were not built"; exit 1; }
+          grep -q 'Application/UniXNU' /tmp/unixnu.txt || { echo "::error::UniXNU menu application missing"; exit 1; }
+          grep -q 'Driver/UniXNUDxe' /tmp/unixnu.txt || { echo "::error::UniXNUDxe missing"; exit 1; }
+          [ "$(wc -l < /tmp/darwin.txt)" -ge 1 ] || { echo "::error::DarwinBoot was not built"; exit 1; }
+          size=$(stat -c%s ../Mu-cepheus-unixnu.img)
+          stock=$(stat -c%s ../Mu-cepheus-stock.img)
+          echo "unixnu image $size bytes, stock $stock bytes"
+          [ "$size" -gt "$stock" ] || { echo "::error::UniXNU image is not larger than stock; the overlay did nothing"; exit 1; }
 
       - name: Upload UniXNU image
         if: always()

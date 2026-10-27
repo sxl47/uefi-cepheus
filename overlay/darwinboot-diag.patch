@@ -1,0 +1,49 @@
+diff --git a/DarwinBootPkg/Driver/DarwinBoot.c b/DarwinBootPkg/Driver/DarwinBoot.c
+index e2c5d91..f2cbc81 100644
+--- a/DarwinBootPkg/Driver/DarwinBoot.c
++++ b/DarwinBootPkg/Driver/DarwinBoot.c
+@@ -681,7 +681,14 @@ Boot (
+   DEBUG ((DEBUG_ERROR, "ID_AA64MMFR0_EL1 0x%lx  (PARange %lu, 4 KiB granule %a)\n", READ_SYSREG (id_aa64mmfr0_el1),
+           READ_SYSREG (id_aa64mmfr0_el1) & 0xF, (((READ_SYSREG (id_aa64mmfr0_el1) >> 28) & 0xF) == 0xF) ? "NOT supported" : "supported"));
+   DEBUG ((DEBUG_ERROR, "ID_AA64PFR0_EL1  0x%lx\n", READ_SYSREG (id_aa64pfr0_el1)));
+-  DEBUG ((DEBUG_ERROR, "\nExiting boot services. A green bar across the top\nmarks the loader handoff before the kernel branch.\n"));
++  //
++  // Repeat the two numbers a silent kernel is diagnosed with, as the last
++  // lines the loader can print. The marker now sits at the bottom, but a
++  // duplicate pair right here survives even a partial screen overwrite.
++  //
++  DEBUG ((DEBUG_ERROR, "\nvideo    pa 0x%lx  %lux%lu  row %lu bytes  %lu bpp\n", Video[0], Video[3], Video[4], Video[2], Video[5]));
++  DEBUG ((DEBUG_ERROR, "entry    pa 0x%lx\n", Address + Kernel.Entry - Kernel.Base));
++  DEBUG ((DEBUG_ERROR, "Exiting boot services. A green bar across the BOTTOM\nmarks the loader handoff before the kernel branch.\n"));
+   for (Attempt = 0; Attempt < 3; Attempt++) {
+     MapSize = Capacity;
+     Status = gBS->GetMemoryMap (&MapSize, Map, &Key, &Stride, &Version);
+diff --git a/DarwinBootPkg/Driver/Entry.S b/DarwinBootPkg/Driver/Entry.S
+index a7a55c2..9e0512c 100644
+--- a/DarwinBootPkg/Driver/Entry.S
++++ b/DarwinBootPkg/Driver/Entry.S
+@@ -9,14 +9,22 @@ ASM_FUNC(DarwinCurrentEl)
+ // PA (0 for none), x5=its size in bytes. EL1 only.
+ ASM_FUNC(DarwinEnter)
+   msr daifset, #15
+-  // Paint the top 1/16 of the framebuffer green (BGRA 0xFF00FF00)
++  // Paint the BOTTOM 1/16 of the framebuffer green (BGRA 0xFF00FF00)
+   // before cache maintenance, MMU shutdown and the branch to the kernel.
++  //
++  // The marker used to sit at the top, where it painted over the hand-off
++  // block DarwinBoot prints just before ExitBootServices. That block carries
++  // the firmware framebuffer base ("video base") and the kernel entry PA --
++  // exactly the numbers a silent kernel is diagnosed with. Keep the marker,
++  // but move it out of the way of the log.
+   cbz x4, 2f
+   lsr x9, x5, #4
+   bic x9, x9, #7
+   mov w10, #0xFF00
+   movk w10, #0xFF00, lsl #16
+-  mov x11, x4
++  add x11, x4, x5
++  sub x11, x11, x9
++  bic x11, x11, #7
+ 3:
+   stp w10, w10, [x11], #8
+   subs x9, x9, #8

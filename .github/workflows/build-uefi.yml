@@ -105,3 +105,18 @@ jobs:
           name: Mu-cepheus-unixnu
           path: Mu-cepheus-unixnu.img
           if-no-files-found: ignore
+
+      - name: Publish UEFI images to release (public direct download)
+        if: always()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: uefi-${{ github.run_id }}
+          name: uefi-cepheus ${{ github.sha }}
+          body: |
+            Automated uefi-cepheus build (${{ github.sha }})
+            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          files: |
+            Mu-cepheus-unixnu.img
+            Mu-cepheus-stock.img
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
